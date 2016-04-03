@@ -10,8 +10,9 @@
         START_YEAR = 1974,
         END_YEAR   = 2014,
 
-        TRANSITION_INTERVAL = 750,
-        TRANSITION_DURATION = 750;
+        TRANSITION_INTERVAL = 300,
+        TRANSITION_DURATION = 300,
+        TRANSITION_EASING   = 'linear';
 
     Chart = function (el) {
         this.setup(el);
@@ -113,12 +114,12 @@
                 .attr('cy', function (d) { return chart.y(d.income); })
                 .style('opacity', 0);
 
-            cohorts.transition().duration(TRANSITION_DURATION)
+            cohorts.transition().duration(TRANSITION_DURATION).ease(TRANSITION_EASING)
                 .attr('cx', function (d) { return chart.x(d.age); })
                 .attr('cy', function (d) { return chart.y(d.income); })
                 .style('opacity', 1);
 
-            cohorts.exit().transition().duration(TRANSITION_DURATION)
+            cohorts.exit().transition().duration(TRANSITION_DURATION).ease(TRANSITION_EASING)
                 .style('opacity', 0)
                 .remove();
 
@@ -136,7 +137,7 @@
 
             var nextYear;
 
-            trailLines.transition().duration(TRANSITION_DURATION)
+            trailLines.transition().duration(TRANSITION_DURATION).ease(TRANSITION_EASING)
                 .attr('x2', function (d) {
                     var nextYear = app.data.filter(function (e) { return e.year === d.year + 1 && e.age === d.age + 1; })[0];
                     if (nextYear) {
