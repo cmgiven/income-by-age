@@ -15,8 +15,7 @@
         TRANSITION_EASING   = 'linear';
 
     Chart = function (el) {
-        this.setup(el);
-        this.update(app.globals);
+        this.setup(el, app.globals);
     };
 
     Chart.prototype = {
@@ -25,82 +24,121 @@
             highlightedCohort: null
         },
 
-        setup: function (el) {
+        setup: function (el, props) {
             var chart = this;
 
-            var width = 600;
-            var height = 400;
+            chart.el = el;
+            chart.svg = d3.select(el).append('svg');
 
-            var margin = {
-                top: 15, right: 15, bottom: 30, left: 60
-            };
+            chart.margin = { top: 15, right: 15, bottom: 30, left: 60 };
 
-            chart.svg = d3.select(el)
-                .append('svg')
-                .attr('width', width)
-                .attr('height', height)
-                .append('g')
-                .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
-
-            width = width - margin.left - margin.right;
-            height = height - margin.top - margin.bottom;
+            chart.body = chart.svg.append('g')
+                .attr('transform', 'translate(' + chart.margin.left + ',' + chart.margin.top + ')');
 
             var ageExtent = d3.extent(app.data, function (d) { return d.age; });
 
-            chart.x = d3.scale.linear()
-                .domain(ageExtent)
-                .range([0, width]);
+            chart.scales = {
+                x: d3.scale.linear()
+                    .domain(ageExtent),
+                y: d3.scale.linear()
+                    .domain([0, d3.max(app.data, function (d) { return d.income; })])
+            };
 
-            chart.y = d3.scale.linear()
-                .domain([0, d3.max(app.data, function (d) { return d.income; })])
-                .range([height, 0]);
+            chart.scales.resize = function () {
+                chart.scales.x.range([0, chart.width]);
+                chart.scales.y.range([chart.height, 0]);
+            }
 
             chart.line = d3.svg.line()
-                .x(function (d) { return chart.x(d.age); })
-                .y(function (d) { return chart.y(d.income); });
+                .x(function (d) { return chart.scales.x(d.age); })
+                .y(function (d) { return chart.scales.y(d.income); });
+
+            chart.layers = {
+                bg: chart.body.append('g').attr('class', 'bg'),
+                trails: chart.body.append('g').attr('class', 'trails'),
+                cohorts: chart.body.append('g').attr('class', 'cohorts'),
+                interaction: chart.body.append('g').attr('class', 'interaction')
+            }
 
             var xAxis = d3.svg.axis()
-                .scale(chart.x)
+                .scale(chart.scales.x)
                 .orient('bottom');
 
             var yAxis = d3.svg.axis()
-                .scale(chart.y)
+                .scale(chart.scales.y)
                 .orient('left')
-                .tickSize(-width)
                 .tickFormat(d3.format('$,d'));
 
-            chart.svg.append('g')
-                .attr('class', 'x axis')
-                .attr('transform', 'translate(0,' + height + ')')
-                .call(xAxis);
+            chart.axes = {
+                x: chart.layers.bg.append('g')
+                    .attr('class', 'x axis'),
+                y: chart.layers.bg.append('g')
+                    .attr('class', 'y axis')
+            };
 
-            chart.svg.append('g')
-                .attr('class', 'y axis')
-                .call(yAxis);
+            chart.axes.resize = function () {
+                yAxis.tickSize(-chart.width);
 
-            chart.layers = {
-                trails: chart.svg.append('g'),
-                cohorts: chart.svg.append('g'),
-                interaction: chart.svg.append('g').attr('class', 'interaction')
-            }
+                chart.axes.x
+                    .attr('transform', 'translate(0,' + chart.height + ')')
+                    .call(xAxis);
+                chart.axes.y
+                    .call(yAxis);
+            };
 
-            var ageRects = chart.layers.interaction.selectAll('.age-rects')
-                .data(d3.range(ageExtent[0], ageExtent[1]));
+            var ageRange = d3.range(ageExtent[0], ageExtent[1] + 1);
 
-            ageRects.enter().append('rect')
-                .attr('class', 'age-rects')
-                .attr('x', function (d) { return chart.x(d); })
-                .attr('y', 0)
-                .attr('width', function (d) { return chart.x(d + 1) - chart.x(d); })
-                .attr('height', height )
-                .on('mouseover', function (d) { chart.highlight(d); })
-                .on('mouseout', function () { chart.highlight(null); });;
+            chart.interactions = {
+                ageRects: chart.layers.interaction.selectAll('.age-rects')
+                    .data(ageRange)
+                    .enter().append('rect')
+                    .attr('class', 'age-rects')
+                    .on('mouseover', function (d) { chart.highlight(d); })
+                    .on('mouseout', function () { chart.highlight(0); })
+            };
+
+            chart.interactions.resize = function () {
+                var bandWidth = chart.scales.x(ageRange[1]) - chart.scales.x(ageRange[0]);
+
+                chart.interactions.ageRects
+                    .attr('x', function (d) { return chart.scales.x(d) - bandWidth / 2; })
+                    .attr('y', 0)
+                    .attr('width', bandWidth)
+                    .attr('height', chart.height )
+            };
+
+            chart.resize(props);
+        },
+
+        resize: function (props) {
+            var chart = this;
+
+            var $el = $(chart.el);
+            var width = $el.width();
+            var height = $el.height();
+
+            chart.svg
+                .attr('width', width)
+                .attr('height', height)
+
+            chart.width = width - chart.margin.left - chart.margin.right;
+            chart.height = height - chart.margin.top - chart.margin.bottom;
+
+            chart.scales.resize();
+            chart.axes.resize();
+            chart.interactions.resize();
+
+            chart.update(props);
         },
 
         update: function (props) {
             var chart = this;
 
-            var year = chart.state.year = props.year;
+            var props = props || {};
+            var animate = props.animate || props.year ? props.year > chart.state.year : false;
+            var year = chart.state.year = props.year || chart.state.year;
+
+            var duration = animate ? TRANSITION_DURATION : 0;
 
             var yearData = app.data.filter(function (d) { return d.year === year; });
 
@@ -110,16 +148,16 @@
             cohorts.enter().append('circle')
                 .attr('class', 'cohort')
                 .attr('r', 2)
-                .attr('cx', function (d) { return chart.x(d.age); })
-                .attr('cy', function (d) { return chart.y(d.income); })
+                .attr('cx', function (d) { return chart.scales.x(d.age); })
+                .attr('cy', function (d) { return chart.scales.y(d.income); })
                 .style('opacity', 0);
 
-            cohorts.transition().duration(TRANSITION_DURATION).ease(TRANSITION_EASING)
-                .attr('cx', function (d) { return chart.x(d.age); })
-                .attr('cy', function (d) { return chart.y(d.income); })
+            cohorts.transition().duration(duration).ease(TRANSITION_EASING)
+                .attr('cx', function (d) { return chart.scales.x(d.age); })
+                .attr('cy', function (d) { return chart.scales.y(d.income); })
                 .style('opacity', 1);
 
-            cohorts.exit().transition().duration(TRANSITION_DURATION).ease(TRANSITION_EASING)
+            cohorts.exit().transition().duration(duration).ease(TRANSITION_EASING)
                 .style('opacity', 0)
                 .remove();
 
@@ -130,28 +168,30 @@
 
             trailLines.enter().append('line')
                 .attr('class', 'cohort trail')
-                .attr('x1', function (d) { return chart.x(d.age) })
-                .attr('y1', function (d) { return chart.y(d.income) })
-                .attr('x2', function (d) { return chart.x(d.age) })
-                .attr('y2', function (d) { return chart.y(d.income) });
+                .attr('x2', function (d) { return chart.scales.x(d.age) })
+                .attr('y2', function (d) { return chart.scales.y(d.income) });
+
+            trailLines
+                .attr('x1', function (d) { return chart.scales.x(d.age) })
+                .attr('y1', function (d) { return chart.scales.y(d.income) });
 
             var nextYear;
 
-            trailLines.transition().duration(TRANSITION_DURATION).ease(TRANSITION_EASING)
+            trailLines.transition().duration(duration).ease(TRANSITION_EASING)
                 .attr('x2', function (d) {
                     var nextYear = app.data.filter(function (e) { return e.year === d.year + 1 && e.age === d.age + 1; })[0];
                     if (nextYear) {
-                        return chart.x(nextYear.age);
+                        return chart.scales.x(nextYear.age);
                     } else {
-                        return chart.x(d.age);
+                        return chart.scales.x(d.age);
                     }
                 })
                 .attr('y2', function (d) {
                     var nextYear = app.data.filter(function (e) { return e.year === d.year + 1 && e.age === d.age + 1; })[0];
                     if (nextYear) {
-                        return chart.y(nextYear.income);
+                        return chart.scales.y(nextYear.income);
                     } else {
-                        return chart.y(d.income);
+                        return chart.scales.y(d.income);
                     }
                 })
                 .style('opacity', function (d) { return (6 + d.year - year) / 5; });
@@ -180,7 +220,8 @@
         highlight: function (age) {
             var chart = this;
 
-            chart.state.highlightedCohort = chart.state.year - age || chart.state.highlightedCohort;
+            chart.state.highlightedCohort = age ? chart.state.year - age :
+                age === 0 ? null : chart.state.highlightedCohort;
 
             function isHighlighted(d) {
                 if (!chart.state.highlightedCohort) { return false; }
@@ -203,7 +244,7 @@
 
             trail.attr('d', chart.line);
 
-            trail.exit().remove()
+            trail.exit().remove();
         }
     };
 
@@ -275,6 +316,8 @@
             app.components.chart    = new Chart('#chart');
             app.components.controls = new Controls('#controls');
 
+            $(window).resize(app.resize);
+
             $(window).keydown(function (e) {
                 switch (e.which) {
                 case 32: // space
@@ -290,6 +333,8 @@
 
             $('#loading').fadeOut();
             $('#main').fadeIn();
+
+            app.resize();
 
             // Let's move!
             app.toggleAnimation();
@@ -321,6 +366,7 @@
                         var availableYears = app.globals.availableYears;
                         var currentIdx = availableYears.indexOf(app.globals.year);
                         app.setYear(availableYears[(currentIdx + 1) % availableYears.length]);
+                        if (app.globals.year === END_YEAR) { app.toggleAnimation(true); }
                         startTime = time;
                     }
 

@@ -181,9 +181,9 @@ header {
     border-color: #ccc;
 }
 
-.exhibit svg {
-    display: block;
-    margin: 0 auto;
+.exhibit {
+    width: 100%;
+    height: 400px;
 }
 
 /* Modified version of SpinKit */
