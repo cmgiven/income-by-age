@@ -10,36 +10,37 @@
         START_YEAR = 1974,
         END_YEAR   = 2014,
 
-        TRANSITION_INTERVAL = 300,
-        TRANSITION_DURATION = 300,
-        TRANSITION_EASING   = 'linear';
+        CIRCLE_RADIUS = 4,
+        TRANSITION_DURATION = 300;
 
-    Chart = function (el) {
-        this.setup(el, app.globals);
+    Chart = function (el, owner, data, props) {
+        this.el = el;
+        this.owner = owner;
+        this.data = d3.nest()
+            .key(function (d) { return d.year - d.age; })
+            .sortValues(function (a, b) { return a.year - b.year; })
+            .entries(data);
+        this.data.forEach(function (d) { d.keyInt = parseInt(d.key, 10); });
+        this.setup(props);
     };
 
     Chart.prototype = {
-        state: {
-            year: START_YEAR,
-            highlightedCohort: null
-        },
-
-        setup: function (el, props) {
+        setup: function (props) {
             var chart = this;
 
-            chart.el = el;
-            chart.svg = d3.select(el).append('svg');
+            chart.svg = d3.select(chart.el).append('svg');
+            chart.canvas = d3.select(chart.el).append('canvas');
 
             chart.margin = { top: 15, right: 15, bottom: 30, left: 60 };
 
             chart.body = chart.svg.append('g')
                 .attr('transform', 'translate(' + chart.margin.left + ',' + chart.margin.top + ')');
 
-            var ageExtent = d3.extent(app.data, function (d) { return d.age; });
+            chart.ageExtent = d3.extent(app.data, function (d) { return d.age; });
 
             chart.scales = {
                 x: d3.scale.linear()
-                    .domain(ageExtent),
+                    .domain(chart.ageExtent),
                 y: d3.scale.linear()
                     .domain([0, d3.max(app.data, function (d) { return d.income; })])
             };
@@ -49,14 +50,8 @@
                 chart.scales.y.range([chart.height, 0]);
             }
 
-            chart.line = d3.svg.line()
-                .x(function (d) { return chart.scales.x(d.age); })
-                .y(function (d) { return chart.scales.y(d.income); });
-
             chart.layers = {
                 bg: chart.body.append('g').attr('class', 'bg'),
-                trails: chart.body.append('g').attr('class', 'trails'),
-                cohorts: chart.body.append('g').attr('class', 'cohorts'),
                 interaction: chart.body.append('g').attr('class', 'interaction')
             }
 
@@ -86,15 +81,16 @@
                     .call(yAxis);
             };
 
-            var ageRange = d3.range(ageExtent[0], ageExtent[1] + 1);
+            var ageRange = d3.range(chart.ageExtent[0], chart.ageExtent[1] + 1);
 
             chart.interactions = {
                 ageRects: chart.layers.interaction.selectAll('.age-rects')
                     .data(ageRange)
                     .enter().append('rect')
                     .attr('class', 'age-rects')
-                    .on('mouseover', function (d) { chart.highlight(d); })
-                    .on('mouseout', function () { chart.highlight(0); })
+                    .on('mouseover', function (d) { chart.owner.requestHighlightYear(d); })
+                    .on('mouseout', function () { chart.owner.requestHighlightYear(0); })
+                    .on('click', function (d) { chart.owner.requestHighlightYear(d, true); })
             };
 
             chart.interactions.resize = function () {
@@ -119,7 +115,18 @@
 
             chart.svg
                 .attr('width', width)
-                .attr('height', height)
+                .attr('height', height);
+
+            chart.canvas
+                .attr('width', width)
+                .attr('height', height);
+
+            chart.context = chart.canvas.node().getContext('2d');
+            chart.context.translate(chart.margin.left, chart.margin.top);
+
+            chart.clearCanvas = function (ctx) {
+                ctx.clearRect(0 - chart.margin.left, 0 - chart.margin.top, width, height);
+            }
 
             chart.width = width - chart.margin.left - chart.margin.right;
             chart.height = height - chart.margin.top - chart.margin.bottom;
@@ -128,162 +135,109 @@
             chart.axes.resize();
             chart.interactions.resize();
 
-            chart.update(props);
+            chart.render(props, true);
         },
 
-        update: function (props) {
+        render: function (props, forceRender) {
             var chart = this;
+            var ctx = chart.context;
 
-            var props = props || {};
-            var animate = props.animate || props.year ? props.year > chart.state.year : false;
-            var year = chart.state.year = props.year || chart.state.year;
+            props = props || chart.lastProps;
+            if (!forceRender && chart.lastProps &&
+                props.year === chart.lastProps.year &&
+                props.highlightedCohorts === chart.lastProps.highlightedCohorts)
+            { return; }
+            chart.lastProps = props;
 
-            var duration = animate ? TRANSITION_DURATION : 0;
+            chart.clearCanvas(ctx);
+            ctx.fillStyle = 'rgb(4,118,199)';
+            ctx.strokeStyle = 'rgba(4,118,199,.33)';
 
-            var yearData = app.data.filter(function (d) { return d.year === year; });
+            var rem = props.year % 1;
+            var i, j;
 
-            var cohorts = chart.layers.cohorts.selectAll('.cohort')
-                .data(yearData, function (d) { return d.year - d.age; });
+            for (i = 0; i < chart.data.length; i++) {
+                var d = chart.data[i];
+                var x, y;
 
-            cohorts.enter().append('circle')
-                .attr('class', 'cohort')
-                .attr('r', 2)
-                .attr('cx', function (d) { return chart.scales.x(d.age); })
-                .attr('cy', function (d) { return chart.scales.y(d.income); })
-                .style('opacity', 0);
+                ctx.beginPath();
 
-            cohorts.transition().duration(duration).ease(TRANSITION_EASING)
-                .attr('cx', function (d) { return chart.scales.x(d.age); })
-                .attr('cy', function (d) { return chart.scales.y(d.income); })
-                .style('opacity', 1);
+                for (j = 0; j < d.values.length; j++) {
+                    var e = d.values[j];
 
-            cohorts.exit().transition().duration(duration).ease(TRANSITION_EASING)
-                .style('opacity', 0)
-                .remove();
+                    if (e.year >= props.year + 1) { break; }
 
-            var trailData = app.data.filter(function (d) { return d.year >= year - 5 && d.year < year; });
-
-            var trailLines = chart.layers.trails.selectAll('line.trail')
-                .data(trailData, function (d) { return d.year + '-' + d.age; });
-
-            trailLines.enter().append('line')
-                .attr('class', 'cohort trail')
-                .attr('x2', function (d) { return chart.scales.x(d.age) })
-                .attr('y2', function (d) { return chart.scales.y(d.income) });
-
-            trailLines
-                .attr('x1', function (d) { return chart.scales.x(d.age) })
-                .attr('y1', function (d) { return chart.scales.y(d.income) });
-
-            var nextYear;
-
-            trailLines.transition().duration(duration).ease(TRANSITION_EASING)
-                .attr('x2', function (d) {
-                    var nextYear = app.data.filter(function (e) { return e.year === d.year + 1 && e.age === d.age + 1; })[0];
-                    if (nextYear) {
-                        return chart.scales.x(nextYear.age);
+                    if (e.year <= props.year || j === 0) {
+                        x = chart.scales.x(e.age);
+                        y = chart.scales.y(e.income);
                     } else {
-                        return chart.scales.x(d.age);
+                        x += (chart.scales.x(e.age) - x) * rem;
+                        y += (chart.scales.y(e.income) - y) * rem;
                     }
-                })
-                .attr('y2', function (d) {
-                    var nextYear = app.data.filter(function (e) { return e.year === d.year + 1 && e.age === d.age + 1; })[0];
-                    if (nextYear) {
-                        return chart.scales.y(nextYear.income);
+
+                    if (j === 0) {
+                        ctx.moveTo(x, y);
                     } else {
-                        return chart.scales.y(d.income);
+                        ctx.lineTo(x, y);
                     }
-                })
-                .style('opacity', function (d) { return (6 + d.year - year) / 5; });
+                }
 
-            trailLines.exit().remove();
+                ctx.stroke();
 
-            var oldData = app.data.filter(function (d) { return d.year <= year - 5; });
-            var nestedOldData = d3.nest()
-                .key(function (d) { return d.year - d.age; })
-                .entries(oldData);
-
-            var trailPaths = chart.layers.trails.selectAll('path.trail')
-                .data(nestedOldData, function (d) { return d.key; });
-
-            trailPaths.enter().append('path')
-                .attr('class', 'cohort trail');
-
-            trailPaths
-                .attr('d', function (d) { return chart.line(d.values); });
-
-            trailPaths.exit().remove();
-
-            chart.highlight();
-        },
-
-        highlight: function (age) {
-            var chart = this;
-
-            chart.state.highlightedCohort = age ? chart.state.year - age :
-                age === 0 ? null : chart.state.highlightedCohort;
-
-            function isHighlighted(d) {
-                if (!chart.state.highlightedCohort) { return false; }
-                return d.year - d.age === chart.state.highlightedCohort ||
-                    d.key === '' + chart.state.highlightedCohort;
+                if (d.keyInt + chart.ageExtent[1] >= props.year &&
+                    d.keyInt + chart.ageExtent[0] <= props.year) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, CIRCLE_RADIUS, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
             }
-
-            chart.svg.selectAll('.cohort')
-                .classed('highlighted', isHighlighted);
-
-            var trailData = app.data.filter(function (d) {
-                return d.year < chart.state.year && d.year - d.age === chart.state.highlightedCohort;
-            });
-
-            var trail = chart.layers.interaction.selectAll('.trail')
-                .data([trailData]);
-
-            trail.enter().append('path')
-                .attr('class', 'trail highlighted');
-
-            trail.attr('d', chart.line);
-
-            trail.exit().remove();
         }
     };
 
-    Controls = function (el) {
+    Controls = function (el, owner, data, props) {
         this.$el = $(el);
-
-        this.setup();
-        this.$el.find('#year-label').text(app.globals.year);
-        this.setAnimationState(app.globals.animating);
+        this.owner = owner;
+        this.setup(props);
     };
 
     Controls.prototype = {
-        setup: function () {
+        setup: function (props) {
+            var owner = this.owner;
+
             function animationToggle(e) {
                 if (!$(e.target).hasClass('disabled')) {
-                    app.toggleAnimation();
+                    owner.toggleAnimation();
                 }
             }
 
             this.$el.find('#animate').click(animationToggle);
+
+            this.render(props);
         },
 
-        update: function (props) {
-            var year = props.year;
-            var yearLabel = this.$el.find('#year-label');
+        render: function (props) {
+            var updated = false;
 
-            setTimeout(function() { yearLabel.text(year); }, TRANSITION_DURATION / 2);
-        },
-
-        setAnimationState: function (animating) {
-            var toggle = this.$el.find('#animate');
-
-            if (animating) {
-                toggle.removeClass('paused');
-                toggle.addClass('playing');
-            } else {
-                toggle.removeClass('playing');
-                toggle.addClass('paused');
+            if (!this.lastProps || props.roundYear !== this.lastProps.roundYear) {
+                this.$el.find('#year-label').text(props.roundYear);
+                updated = true;
             }
+
+            if (!this.lastProps || props.animating !== this.lastProps.animating) {
+                var toggle = this.$el.find('#animate');
+
+                if (props.animating) {
+                    toggle.removeClass('paused');
+                    toggle.addClass('playing');
+                } else {
+                    toggle.removeClass('playing');
+                    toggle.addClass('paused');
+                }
+
+                updated = true;
+            }
+
+            if (updated) { this.lastProps = props; }
         }
     };
 
@@ -299,10 +253,16 @@
         },
 
         globals: {
-            availableYears: d3.range(START_YEAR, END_YEAR + 1),
+            live: false,
+            animating: false,
             year: START_YEAR,
-            animating: false
+            roundYear: START_YEAR,
+            highlightedCohorts: [],
+            highlightIndex: 0
         },
+
+        transitionQueue: [],
+        activeTransitions: {},
 
         initialize: function (data) {
             app.data = data.map(function (d) {
@@ -313,8 +273,8 @@
                 };
             });
 
-            app.components.chart    = new Chart('#chart');
-            app.components.controls = new Controls('#controls');
+            app.components.chart    = new Chart('#chart', app, app.data, app.globals);
+            app.components.controls = new Controls('#controls', app, null, app.globals);
 
             $(window).resize(app.resize);
 
@@ -335,8 +295,6 @@
             $('#main').fadeIn();
 
             app.resize();
-
-            // Let's move!
             app.toggleAnimation();
         },
 
@@ -348,53 +306,106 @@
             }
         },
 
-        setYear: function (year) {
-            app.globals.year = year;
+        render: function (props) {
             for (var component in app.components) {
-                if (app.components[component].update) {
-                    app.components[component].update(app.globals);
+                if (app.components[component].render) {
+                    app.components[component].render(props);
                 }
             }
         },
 
-        toggleAnimation: function (disable) {
-            var startTime = null;
+        animationFrame: function (time) {
+            var updatedProps = {};
 
-            function frame(time) {
-                if (app.globals.animating) {
-                    if (!startTime) {
-                        var availableYears = app.globals.availableYears;
-                        var currentIdx = availableYears.indexOf(app.globals.year);
-                        app.setYear(availableYears[(currentIdx + 1) % availableYears.length]);
-                        if (app.globals.year === END_YEAR) { app.toggleAnimation(true); }
-                        startTime = time;
+            while (app.transitionQueue.length) {
+                var update = app.transitionQueue.shift();
+
+                if (update.transition === 0) {
+                    updatedProps[update.key] = update.value;
+                    if (app.activeTransitions[update.key]) {
+                        delete app.activeTransitions[update.key];
                     }
+                } else {
+                    var originalValue = updatedProps[update.key] || app.globals[update.key];
 
-                    var progress = time - startTime;
-
-                    if (progress <= TRANSITION_INTERVAL) {
-                        window.requestAnimationFrame(frame);
-                    } else {
-                        startTime = null;
-                        window.requestAnimationFrame(frame);
-                    }
+                    app.activeTransitions[update.key] = {
+                        value: update.value,
+                        distance: originalValue - update.value,
+                        duration: update.transition,
+                        start: time
+                    };
                 }
             }
 
-            if (app.globals.animating || disable) {
-                app.globals.animating = false;
-                $('body').removeClass('animating');
-                if (app.components.controls.setAnimationState) {
-                    app.components.controls.setAnimationState(false);
-                }
+            for (var property in app.activeTransitions) {
+                var transition = app.activeTransitions[property];
+                var remaining = time === transition.start ? 1 :
+                    Math.max(1 - (time - transition.start) / transition.duration, 0);
+
+                updatedProps[property] = transition.value + (transition.distance * remaining);
+
+                if (remaining === 0) { delete app.activeTransitions[property]; }
+            }
+
+            if (Object.keys(updatedProps).length) {
+                if (updatedProps.year) { updatedProps.roundYear = Math.round(updatedProps.year); }
+                updatedProps.animating = app.activeTransitions.year ? true : false;
+
+                app.globals = Object.assign({}, app.globals, updatedProps);
+                app.render(app.globals);
+
+                window.requestAnimationFrame(app.animationFrame);
             } else {
-                app.globals.animating = true;
-                window.requestAnimationFrame(frame);
-                $('body').addClass('animating');
-                if (app.components.controls.setAnimationState) {
-                    app.components.controls.setAnimationState(true);
-                }
+                app.globals.live = false;
             }
+        },
+
+        enqueueTransitions: function (arr) {
+            arr.forEach(function (prop) {
+                app.transitionQueue.push({
+                    key: prop.key,
+                    value: prop.value,
+                    transition: prop.transition || 0
+                });
+            });
+
+            if (!app.globals.live) {
+                app.globals.live = true;
+                window.requestAnimationFrame(app.animationFrame);
+            }
+        },
+
+        toggleAnimation: function () {
+            var currentYear = app.globals.year;
+
+            if (app.globals.animating) {
+                var roundYear = app.globals.roundYear;
+
+                app.enqueueTransitions([{
+                    key: 'year',
+                    value: roundYear,
+                    transition: Math.abs(roundYear - currentYear) * TRANSITION_DURATION / 2
+                }]);
+            } else {
+                var transitions = [];
+
+                if (currentYear === END_YEAR) {
+                    transitions.push({ key: 'year', value: START_YEAR });
+                    currentYear = START_YEAR;
+                }
+
+                transitions.push({
+                    key: 'year',
+                    value: END_YEAR,
+                    transition: (END_YEAR - currentYear) * TRANSITION_DURATION
+                });
+
+                app.enqueueTransitions(transitions);
+            }
+        },
+
+        requestHighlightYear: function (year, lock) {
+            //
         }
     };
 }());

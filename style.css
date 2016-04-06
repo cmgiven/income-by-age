@@ -10,35 +10,8 @@
     font-weight: 300;
 }
 
-circle.cohort {
-    stroke: rgb(4,118,199);
-    fill: rgb(4,118,199);
-}
-
-.trail {
-    stroke: rgb(4,118,199);
-    stroke-width: 1px;
-    stroke-linecap: round;
-    fill: none;
-    opacity: .2;
-}
-
-circle.cohort.highlighted {
-    stroke: rgb(222,11,83);
-    fill: rgb(222,11,83);
-}
-
-.trail.highlighted {
-    stroke: rgb(222,11,83);
-    stroke-width: 2px;
-}
-
 .interaction rect {
     opacity: 0;
-}
-
-.interaction .trail {
-    opacity: 1;
 }
 
 html {
@@ -182,8 +155,16 @@ header {
 }
 
 .exhibit {
+    position: relative;
     width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
     height: 400px;
+}
+
+.exhibit canvas {
+    position: absolute;
+    top: 0; left: 0;
 }
 
 /* Modified version of SpinKit */
