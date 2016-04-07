@@ -286,15 +286,30 @@
         this.owner = owner;
         this.data = data;
         this.lastProps = {};
-        this.render(props);
+        this.setup(props);
     };
 
     Tooltips.prototype = {
+        setup: function (props) {
+            var owner = this.owner;
+            this.$el.find('button.clear').each(function (i) {
+                $(this).click(function() { owner.removeHighlight(i); });
+            });
+            this.render(props);
+        },
+
         render: function (props) {
             var tooltips = this;
-            var updated = false;
 
-            if (props.highlightedCohorts !== tooltips.lastProps.highlightedCohorts) {
+            var yearChanged = props.roundYear !== tooltips.lastProps.roundYear;
+            var cohortsChanged = props.highlightedCohorts !== tooltips.lastProps.highlightedCohorts;
+
+            if (yearChanged) {
+                tooltips.$el.find('.currentYear').text(props.roundYear);
+                tooltips.lastProps.roundYear = props.roundYear;
+            }
+
+            if (cohortsChanged) {
                 props.highlightedCohorts.map(function (d, i) {
                     if (!tooltips.lastProps.highlightedCohorts) { return true; }
                     return d !== tooltips.lastProps.highlightedCohorts[i];
@@ -327,17 +342,12 @@
                         ', age ' + peakIncome.age +
                         ', ' + peakIncome.year
                     );
-                    updated = true;
                 });
+
+                tooltips.lastProps.highlightedCohorts = props.highlightedCohorts;
             }
 
-            if (props.roundYear !== tooltips.lastProps.roundYear) {
-                tooltips.$el.find('.currentYear').text(props.roundYear);
-                updated = true;
-            }
-
-            if (updated) {
-                Object.assign(tooltips.lastProps, props);
+            if (yearChanged || cohortsChanged) {
                 tooltips.$el.find('.currentAge').each(function (i) {
                     var cohort = tooltips.lastProps.highlightedCohorts[i];
                     var year = tooltips.lastProps.roundYear;
@@ -347,6 +357,22 @@
                         $(this).text(year - cohort);
                     }
                 })
+            }
+
+            if (props.highlightIndex !== tooltips.lastProps.highlightIndex) {
+                var locked = tooltips.lastProps.highlightedCohorts.map(function (d, i) {
+                    return d && props.highlightIndex !== i;
+                });
+
+                tooltips.$el.children().each(function (i) {
+                    if (locked[i]) {
+                        $(this).addClass('locked');
+                    } else {
+                        $(this).removeClass('locked');
+                    }
+                });
+
+                tooltips.lastProps.highlightIndex = props.highlightIndex;
             }
         }
     };
@@ -515,16 +541,30 @@
         requestHighlightYear: function (age, lock) {
             if (app.globals.highlightIndex < 0) { return; }
 
-            if (!lock) {
+            if (!lock || !app.globals.highlightedCohorts[app.globals.highlightIndex]) {
                 var highlights = app.globals.highlightedCohorts.slice(0);
                 highlights[app.globals.highlightIndex] = age ? app.globals.roundYear - age : null;
 
                 app.enqueueTransitions([{ key: 'highlightedCohorts', value: highlights }]);
-            } else {
+            }
+
+            if (lock) {
                 var index = app.globals.highlightedCohorts.indexOf(null);
 
                 app.enqueueTransitions([{ key: 'highlightIndex', value: index }]);
             }
+        },
+
+        removeHighlight: function (idx) {
+            var highlights = app.globals.highlightedCohorts.slice(0);
+            highlights[idx] = null;
+
+            var firstNull = highlights.indexOf(null);
+
+            app.enqueueTransitions([
+                { key: 'highlightedCohorts', value: highlights },
+                { key: 'highlightIndex', value: firstNull }
+            ]);
         }
     };
 }());

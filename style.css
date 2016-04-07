@@ -197,6 +197,14 @@ header {
     color: #E6C440;
 }
 
+#tooltips button.clear {
+    display: none;
+}
+
+#tooltips > div.locked button.clear {
+    display: block;
+}
+
 
 
 /* Modified version of SpinKit */
