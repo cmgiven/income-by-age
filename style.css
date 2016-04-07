@@ -168,6 +168,37 @@ header {
     pointer-events: none;
 }
 
+#tooltips {
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 15px;
+    font-size: 14px;
+}
+
+#tooltips > div {
+    width: 50%;
+    float: left;
+}
+
+#tooltips > div.inactive {
+    opacity: 0.33;
+}
+
+#tooltips span.title {
+    text-transform: uppercase;
+}
+
+#tooltips > div:first-child span.title {
+    color: #F43563;
+}
+
+#tooltips > div:last-child span.title {
+    color: #E6C440;
+}
+
+
+
 /* Modified version of SpinKit */
 /* https://github.com/tobiasahlin/SpinKit */
 /* Copyright (c) 2014 Tobias Ahlin */

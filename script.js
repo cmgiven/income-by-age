@@ -3,6 +3,7 @@
 
     var Chart,
         Controls,
+        Tooltips,
         app,
 
         DATA_PATH = 'data.csv',
@@ -13,7 +14,16 @@
         CIRCLE_RADIUS = 4,
         PRIMARY_COLOR = '#0476C7',
         HIGHLIGHT_COLORS = ['#F43563', '#E6C440'],
-        TRANSITION_DURATION = 300;
+        TRANSITION_DURATION = 300,
+
+        dollars = d3.format('$,d'),
+        generation = function (born) {
+            return born >= 1980 ? 'Millenial' :
+                born >= 1965 ? 'Gen X' :
+                born >= 1946 ? 'Boomer' :
+                born >= 1925 ? 'Silent Generation' :
+                'Greatest Generation';
+        };
 
     Chart = function (el, owner, data, props) {
         this.el = el;
@@ -23,6 +33,7 @@
             .sortValues(function (a, b) { return a.year - b.year; })
             .entries(data);
         this.data.forEach(function (d) { d.keyInt = parseInt(d.key, 10); });
+        this.lastProps = {};
         this.setup(props);
     };
 
@@ -33,7 +44,7 @@
             chart.svg = d3.select(chart.el).append('svg');
             chart.canvas = d3.select(chart.el).append('canvas');
 
-            chart.margin = { top: 15, right: 15, bottom: 30, left: 60 };
+            chart.margin = { top: 15, right: 15, bottom: 30, left: 58 };
 
             chart.body = chart.svg.append('g')
                 .attr('transform', 'translate(' + chart.margin.left + ',' + chart.margin.top + ')');
@@ -64,7 +75,7 @@
             var yAxis = d3.svg.axis()
                 .scale(chart.scales.y)
                 .orient('left')
-                .tickFormat(d3.format('$,d'));
+                .tickFormat(dollars);
 
             chart.axes = {
                 x: chart.layers.bg.append('g')
@@ -145,11 +156,11 @@
             var ctx = chart.context;
 
             props = props || chart.lastProps;
-            if (!forceRender && chart.lastProps &&
+            if (!forceRender &&
                 props.year === chart.lastProps.year &&
                 props.highlightedCohorts === chart.lastProps.highlightedCohorts)
             { return; }
-            chart.lastProps = props;
+            Object.assign(chart.lastProps, props);
 
             var rem = props.year % 1;
 
@@ -225,6 +236,7 @@
     Controls = function (el, owner, data, props) {
         this.$el = $(el);
         this.owner = owner;
+        this.lastProps = {};
         this.setup(props);
     };
 
@@ -246,12 +258,12 @@
         render: function (props) {
             var updated = false;
 
-            if (!this.lastProps || props.roundYear !== this.lastProps.roundYear) {
+            if (props.roundYear !== this.lastProps.roundYear) {
                 this.$el.find('#year-label').text(props.roundYear);
                 updated = true;
             }
 
-            if (!this.lastProps || props.animating !== this.lastProps.animating) {
+            if (props.animating !== this.lastProps.animating) {
                 var toggle = this.$el.find('#animate');
 
                 if (props.animating) {
@@ -265,7 +277,77 @@
                 updated = true;
             }
 
-            if (updated) { this.lastProps = props; }
+            if (updated) { Object.assign(this.lastProps, props); }
+        }
+    };
+
+    Tooltips = function (el, owner, data, props) {
+        this.$el = $(el);
+        this.owner = owner;
+        this.data = data;
+        this.lastProps = {};
+        this.render(props);
+    };
+
+    Tooltips.prototype = {
+        render: function (props) {
+            var tooltips = this;
+            var updated = false;
+
+            if (props.highlightedCohorts !== tooltips.lastProps.highlightedCohorts) {
+                props.highlightedCohorts.map(function (d, i) {
+                    if (!tooltips.lastProps.highlightedCohorts) { return true; }
+                    return d !== tooltips.lastProps.highlightedCohorts[i];
+                }).forEach(function (needsUpdate, i) {
+                    if (!needsUpdate) { return; }
+
+                    var tooltip = tooltips.$el.children(':nth-child(' + (i + 1) + ')');
+                    var cohort = props.highlightedCohorts[i];
+
+                    if (!cohort) {
+                        tooltip.addClass('inactive');
+                        tooltip.find('.cohort-data').text('');
+                        return;
+                    }
+
+                    tooltip.removeClass('inactive');
+
+                    var peakIncome = { income: 0 };
+
+                    tooltips.data.forEach(function (d) {
+                        if (d.year - d.age === cohort && d.income > peakIncome.income) {
+                            peakIncome = d;
+                        }
+                    });
+
+                    tooltip.find('.cohort').text(cohort);
+                    tooltip.find('.generation').text(generation(cohort));
+                    tooltip.find('.peakIncome').text(
+                        dollars(peakIncome.income) +
+                        ', age ' + peakIncome.age +
+                        ', ' + peakIncome.year
+                    );
+                    updated = true;
+                });
+            }
+
+            if (props.roundYear !== tooltips.lastProps.roundYear) {
+                tooltips.$el.find('.currentYear').text(props.roundYear);
+                updated = true;
+            }
+
+            if (updated) {
+                Object.assign(tooltips.lastProps, props);
+                tooltips.$el.find('.currentAge').each(function (i) {
+                    var cohort = tooltips.lastProps.highlightedCohorts[i];
+                    var year = tooltips.lastProps.roundYear;
+                    if (!cohort || cohort > year) {
+                        $(this).text('');
+                    } else {
+                        $(this).text(year - cohort);
+                    }
+                })
+            }
         }
     };
 
@@ -275,10 +357,7 @@
 
     app = {
         data: [],
-        components: {
-            controls: {},
-            chart: {}
-        },
+        components: {},
 
         globals: {
             live: false,
@@ -303,6 +382,7 @@
 
             app.components.chart    = new Chart('#chart', app, app.data, app.globals);
             app.components.controls = new Controls('#controls', app, null, app.globals);
+            app.components.tooltips = new Tooltips('#tooltips', app, app.data, app.globals);
 
             $(window).resize(app.resize);
 
