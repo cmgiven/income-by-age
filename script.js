@@ -18,9 +18,9 @@
 
         dollars = d3.format('$,d'),
         generation = function (born) {
-            return born >= 1980 ? 'Millenial' :
+            return born >= 1985 ? 'Millenial' :
                 born >= 1965 ? 'Gen X' :
-                born >= 1946 ? 'Boomer' :
+                born >= 1945 ? 'Boomer' :
                 born >= 1925 ? 'Silent Generation' :
                 'Greatest Generation';
         };
