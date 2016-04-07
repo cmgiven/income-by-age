@@ -151,7 +151,7 @@
 
             chart.clearCanvas(ctx);
             ctx.fillStyle = 'rgb(4,118,199)';
-            ctx.strokeStyle = 'rgba(4,118,199,.33)';
+            ctx.strokeStyle = 'rgb(4,118,199)';
 
             var rem = props.year % 1;
             var i, j;
@@ -160,6 +160,7 @@
                 var d = chart.data[i];
                 var x, y;
 
+                ctx.globalAlpha = .33;
                 ctx.beginPath();
 
                 for (j = 0; j < d.values.length; j++) {
@@ -180,12 +181,24 @@
                     } else {
                         ctx.lineTo(x, y);
                     }
+
+                    var distance = props.year - e.year;
+
+                    if (distance < 6) {
+                        ctx.stroke();
+                        ctx.globalAlpha = 1 - distance / 9;
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                    }
                 }
 
                 ctx.stroke();
 
-                if (d.keyInt + chart.ageExtent[1] >= props.year &&
-                    d.keyInt + chart.ageExtent[0] <= props.year) {
+                var deltaEnd = props.year - d.keyInt - chart.ageExtent[1];
+                var deltaStart = props.year - d.keyInt - chart.ageExtent[0];
+
+                if (deltaStart > -1 && deltaEnd < 1) {
+                    ctx.globalAlpha = deltaStart < 0 ? rem : deltaEnd > 0 ? 1 - rem : 1;
                     ctx.beginPath();
                     ctx.arc(x, y, CIRCLE_RADIUS, 0, 2 * Math.PI);
                     ctx.fill();
