@@ -303,6 +303,7 @@
 
             var yearChanged = props.roundYear !== tooltips.lastProps.roundYear;
             var cohortsChanged = props.highlightedCohorts !== tooltips.lastProps.highlightedCohorts;
+            var indexChanged = props.highlightIndex !== tooltips.lastProps.highlightIndex;
 
             if (yearChanged) {
                 tooltips.$el.find('.currentYear').text(props.roundYear);
@@ -347,6 +348,10 @@
                 tooltips.lastProps.highlightedCohorts = props.highlightedCohorts;
             }
 
+            if (indexChanged) {
+                tooltips.lastProps.highlightIndex = props.highlightIndex;
+            }
+
             if (yearChanged || cohortsChanged) {
                 tooltips.$el.find('.currentAge').each(function (i) {
                     var cohort = tooltips.lastProps.highlightedCohorts[i];
@@ -359,9 +364,9 @@
                 })
             }
 
-            if (props.highlightIndex !== tooltips.lastProps.highlightIndex) {
+            if (indexChanged || cohortsChanged) {
                 var locked = tooltips.lastProps.highlightedCohorts.map(function (d, i) {
-                    return d && props.highlightIndex !== i;
+                    return d && tooltips.lastProps.highlightIndex !== i;
                 });
 
                 tooltips.$el.children().each(function (i) {
@@ -371,8 +376,6 @@
                         $(this).removeClass('locked');
                     }
                 });
-
-                tooltips.lastProps.highlightIndex = props.highlightIndex;
             }
         }
     };
