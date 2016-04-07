@@ -13,7 +13,7 @@
 
         CIRCLE_RADIUS = 4,
         PRIMARY_COLOR = '#0476C7',
-        HIGHLIGHT_COLORS = ['#F43563', '#E6C440'],
+        HIGHLIGHT_COLORS = ['#E6C440', '#F43563'],
         TRANSITION_DURATION = 300,
 
         dollars = d3.format('$,d'),

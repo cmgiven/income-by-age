@@ -190,11 +190,11 @@ header {
 }
 
 #tooltips > div:first-child span.title {
-    color: #F43563;
+    color: #E6C440;
 }
 
 #tooltips > div:last-child span.title {
-    color: #E6C440;
+    color: #F43563;
 }
 
 #tooltips button.clear {
