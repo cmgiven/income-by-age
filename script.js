@@ -11,6 +11,8 @@
         END_YEAR   = 2014,
 
         CIRCLE_RADIUS = 4,
+        PRIMARY_COLOR = '#0476C7',
+        HIGHLIGHT_COLORS = ['#F43563', '#E6C440'],
         TRANSITION_DURATION = 300;
 
     Chart = function (el, owner, data, props) {
@@ -149,59 +151,72 @@
             { return; }
             chart.lastProps = props;
 
-            chart.clearCanvas(ctx);
-            ctx.fillStyle = 'rgb(4,118,199)';
-            ctx.strokeStyle = 'rgb(4,118,199)';
-
             var rem = props.year % 1;
-            var i, j;
 
-            for (i = 0; i < chart.data.length; i++) {
-                var d = chart.data[i];
-                var x, y;
+            chart.clearCanvas(ctx);
 
-                ctx.globalAlpha = .33;
-                ctx.beginPath();
+            drawCohorts(chart.data, PRIMARY_COLOR);
 
-                for (j = 0; j < d.values.length; j++) {
-                    var e = d.values[j];
+            props.highlightedCohorts.forEach(function (cohortYear, i) {
+                if (!cohortYear) { return; }
+                var series = chart.data.filter(function (d) { return d.keyInt === cohortYear; });
+                drawCohorts(series, HIGHLIGHT_COLORS[i], true);
+            });
 
-                    if (e.year >= props.year + 1) { break; }
+            function drawCohorts(data, color, bold) {
+                var i, j;
 
-                    if (e.year <= props.year || j === 0) {
-                        x = chart.scales.x(e.age);
-                        y = chart.scales.y(e.income);
-                    } else {
-                        x += (chart.scales.x(e.age) - x) * rem;
-                        y += (chart.scales.y(e.income) - y) * rem;
-                    }
+                ctx.fillStyle = color;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = bold ? 2 : 1;
 
-                    if (j === 0) {
-                        ctx.moveTo(x, y);
-                    } else {
-                        ctx.lineTo(x, y);
-                    }
+                for (i = 0; i < data.length; i++) {
+                    var d = data[i];
+                    var x, y;
 
-                    var distance = props.year - e.year;
-
-                    if (distance < 6) {
-                        ctx.stroke();
-                        ctx.globalAlpha = 1 - distance / 9;
-                        ctx.beginPath();
-                        ctx.moveTo(x, y);
-                    }
-                }
-
-                ctx.stroke();
-
-                var deltaEnd = props.year - d.keyInt - chart.ageExtent[1];
-                var deltaStart = props.year - d.keyInt - chart.ageExtent[0];
-
-                if (deltaStart > -1 && deltaEnd < 1) {
-                    ctx.globalAlpha = deltaStart < 0 ? rem : deltaEnd > 0 ? 1 - rem : 1;
+                    ctx.globalAlpha = bold ? 1 : 0.33;
                     ctx.beginPath();
-                    ctx.arc(x, y, CIRCLE_RADIUS, 0, 2 * Math.PI);
-                    ctx.fill();
+
+                    for (j = 0; j < d.values.length; j++) {
+                        var e = d.values[j];
+
+                        if (e.year >= props.year + 1) { break; }
+
+                        if (e.year <= props.year || j === 0) {
+                            x = chart.scales.x(e.age);
+                            y = chart.scales.y(e.income);
+                        } else {
+                            x += (chart.scales.x(e.age) - x) * rem;
+                            y += (chart.scales.y(e.income) - y) * rem;
+                        }
+
+                        if (j === 0) {
+                            ctx.moveTo(x, y);
+                        } else {
+                            ctx.lineTo(x, y);
+                        }
+
+                        var distance = props.year - e.year;
+
+                        if (!bold && distance < 6) {
+                            ctx.stroke();
+                            ctx.globalAlpha = 1 - distance / 9;
+                            ctx.beginPath();
+                            ctx.moveTo(x, y);
+                        }
+                    }
+
+                    ctx.stroke();
+
+                    var deltaEnd = props.year - d.keyInt - chart.ageExtent[1];
+                    var deltaStart = props.year - d.keyInt - chart.ageExtent[0];
+
+                    if (deltaStart > -1 && deltaEnd < 1) {
+                        ctx.globalAlpha = deltaStart < 0 ? rem : deltaEnd > 0 ? 1 - rem : 1;
+                        ctx.beginPath();
+                        ctx.arc(x, y, CIRCLE_RADIUS, 0, 2 * Math.PI);
+                        ctx.fill();
+                    }
                 }
             }
         }
@@ -270,7 +285,7 @@
             animating: false,
             year: START_YEAR,
             roundYear: START_YEAR,
-            highlightedCohorts: [],
+            highlightedCohorts: [null, null],
             highlightIndex: 0
         },
 
@@ -417,8 +432,19 @@
             }
         },
 
-        requestHighlightYear: function (year, lock) {
-            //
+        requestHighlightYear: function (age, lock) {
+            if (app.globals.highlightIndex < 0) { return; }
+
+            if (!lock) {
+                var highlights = app.globals.highlightedCohorts.slice(0);
+                highlights[app.globals.highlightIndex] = age ? app.globals.roundYear - age : null;
+
+                app.enqueueTransitions([{ key: 'highlightedCohorts', value: highlights }]);
+            } else {
+                var index = app.globals.highlightedCohorts.indexOf(null);
+
+                app.enqueueTransitions([{ key: 'highlightIndex', value: index }]);
+            }
         }
     };
 }());

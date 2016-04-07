@@ -165,6 +165,7 @@ header {
 .exhibit canvas {
     position: absolute;
     top: 0; left: 0;
+    pointer-events: none;
 }
 
 /* Modified version of SpinKit */
