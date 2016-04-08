@@ -14,6 +14,7 @@
         CIRCLE_RADIUS = 4,
         PRIMARY_COLOR = '#0476C7',
         HIGHLIGHT_COLORS = ['#E6C440', '#F43563'],
+        SLIDER_WIDTH = 28,
         TRANSITION_DURATION = 300, // 18 frames
         SNAP_DURATION = 83, // 5 frames
 
@@ -254,7 +255,8 @@
 
             this.$el.find('#animate').click(animationToggle);
 
-            this.$el.find('#year-range').mousedown(function () {
+            this.$el.find('#year-range').mousedown(function (e) {
+                owner.setYear(START_YEAR + (END_YEAR - START_YEAR) * ((e.offsetX - SLIDER_WIDTH / 2) / (e.target.offsetWidth - SLIDER_WIDTH)));
                 controls.rangeSliderActive = true;
             });
             this.$el.find('#year-range').mousemove(function (e) {
@@ -504,7 +506,9 @@
 
             if (Object.keys(updatedProps).length) {
                 if (updatedProps.year) { updatedProps.roundYear = Math.round(updatedProps.year); }
-                updatedProps.animating = app.activeTransitions.year ? true : false;
+                updatedProps.animating = app.activeTransitions.year &&
+                    app.activeTransitions.year.duration > SNAP_DURATION ?
+                    true : false;
 
                 app.globals = Object.assign({}, app.globals, updatedProps);
                 app.render(app.globals);
