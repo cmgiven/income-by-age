@@ -131,6 +131,7 @@ header {
     overflow: hidden;
     text-indent: 44px;
     transition: border-color 250ms ease;
+    cursor: pointer;
 }
 
 .play-button:hover {
