@@ -195,14 +195,20 @@ header {
 #tooltips {
     width: 100%;
     max-width: 1000px;
-    margin: 0 auto;
+    margin: 22px auto;
     padding: 0 15px;
     font-size: 14px;
+    line-height: 1em;
+}
+
+#tooltips p {
+    margin: 0 0 15px;
 }
 
 #tooltips > div {
     width: 50%;
     float: left;
+    position: relative;
 }
 
 #tooltips > div.inactive {
@@ -223,13 +229,46 @@ header {
 
 #tooltips button.clear {
     display: none;
+    position: absolute;
+    top: -11px;
+    right: 15px;
+    background: none;
+    border: 0;
+    width: 40px; height: 40px;
+    line-height: 100px; overflow: hidden;
+    cursor: pointer;
+}
+
+#tooltips button.clear:before, #tooltips button.clear:after {
+    content: "";
+    display: block;
+    position: absolute;
+    width: 40px; height: 40px;
+    top: 12px; right: -12px;
+    border-left: 1px solid;
+    transform: rotate(45deg);
+}
+
+#tooltips > div:first-child button.clear:before, #tooltips > div:first-child button.clear:after {
+    border-color: #E6C440;
+}
+
+#tooltips > div:last-child button.clear:before, #tooltips > div:last-child button.clear:after {
+    border-color: #F43563;
+}
+
+#tooltips button.clear:after {
+    top: -16px;
+    transform: rotate(-45deg);
 }
 
 #tooltips > div.locked button.clear {
     display: block;
 }
 
-
+@media screen and (max-width: 550px) {
+    .break-on-mobile { display: block; }
+}
 
 /* Modified version of SpinKit */
 /* https://github.com/tobiasahlin/SpinKit */
