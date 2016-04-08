@@ -14,7 +14,8 @@
         CIRCLE_RADIUS = 4,
         PRIMARY_COLOR = '#0476C7',
         HIGHLIGHT_COLORS = ['#E6C440', '#F43563'],
-        TRANSITION_DURATION = 300,
+        TRANSITION_DURATION = 300, // 18 frames
+        SNAP_DURATION = 83, // 5 frames
 
         dollars = d3.format('$,d'),
         generation = function (born) {
@@ -242,6 +243,7 @@
 
     Controls.prototype = {
         setup: function (props) {
+            var controls = this;
             var owner = this.owner;
 
             function animationToggle(e) {
@@ -252,6 +254,17 @@
 
             this.$el.find('#animate').click(animationToggle);
 
+            this.$el.find('#year-range').mousedown(function () {
+                controls.rangeSliderActive = true;
+            });
+            this.$el.find('#year-range').mousemove(function (e) {
+                if (controls.rangeSliderActive) { owner.setYear(parseFloat(e.target.value)); }
+            });
+            this.$el.find('#year-range').mouseup(function (e) {
+                owner.setYear(Math.round(parseFloat(e.target.value)), true);
+                controls.rangeSliderActive = false;
+            });
+
             this.render(props);
         },
 
@@ -260,6 +273,11 @@
 
             if (props.roundYear !== this.lastProps.roundYear) {
                 this.$el.find('#year-label').text(props.roundYear);
+                updated = true;
+            }
+
+            if (props.year !== this.lastProps.year) {
+                if (!this.rangeSliderActive) { this.$el.find('#year-range').val(props.year); }
                 updated = true;
             }
 
@@ -516,12 +534,10 @@
             var currentYear = app.globals.year;
 
             if (app.globals.animating) {
-                var roundYear = app.globals.roundYear;
-
                 app.enqueueTransitions([{
                     key: 'year',
-                    value: roundYear,
-                    transition: Math.abs(roundYear - currentYear) * TRANSITION_DURATION / 2
+                    value: app.globals.roundYear,
+                    transition: SNAP_DURATION
                 }]);
             } else {
                 var transitions = [];
@@ -539,6 +555,14 @@
 
                 app.enqueueTransitions(transitions);
             }
+        },
+
+        setYear: function (year, smooth) {
+            app.enqueueTransitions([{
+                key: 'year',
+                value: year,
+                transition: smooth ? SNAP_DURATION : 0
+            }]);
         },
 
         requestHighlightYear: function (age, lock) {
